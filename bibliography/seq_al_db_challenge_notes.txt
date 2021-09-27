@@ -1,0 +1,82 @@
+Sequence Alignment as a Database Technology Challenge
+- Jegyzetek -
+
+
+***FOLYTATÁS EBBŐL***
+- Adatbázis index lehetőségeinek kiaknázása -- MonetDB erre nem biztos, hogy megfelelő, de ha mégis akkor sokat változott mióta ezt a cikket írták
+- Figyelembe venni a konkrét hit pozíciót (gap-ek miatt bonyolult)
+- HMMSearch megvalósítása adatbázison belül
+
+
+2007-es cikk: hogyan lehet a MonetDb-t (és általánosságban db-t) az MSA-ra alkalmazni.
+Single Seq Alignment technikák felhasználása a Multiplehez
+Eddig: a db csak tárolásra volt alkalmazva, de megmutatja, hogy a keresésre is lehet
+nukleotid és amino sav stringekhez
+
+
+Single Seq Alignment: 1 string illesztése egy nagy string kollekcióhoz
+- Pontos megoldás dinamikus programozással: Smith-Waterman
+	A string n hosszú, B string m hosszú -> n+1 x m+1-es mátrix
+	Előre meghatározni: s(a,b) hasonlósági pontozás és W_k k hosszú lyuk büntetése
+	
+	Algo: 1. sor és oszlop 0-k
+	H_i,j Cella meghatározása max: - a_i, b_j illesztésének pontja
+								   - a_i k hosszú lyuk vége
+								   - b_j k hosszú lyuk vége
+	Visszavezetés: legmagasabb értéktől indulva egy 0-sig lépkedni felfelé/balra
+	
+- Heurisztikus megoldás: Blast és q-gram indexing
+
+MSA: string kollekció illesztése adatbázisra
+Kollekció reprezentálás: profile rejtett markov modellel (magyarul?)
+profile HMM illesztése protein adatbázisra Viterbi-like dinamikus programozás - HMMER package implementálja PONTOS választ ad egy hasonlósági távolságon belül
+Itt: általánosított, heurisztikus algo
+
+q-gram: q hosszú string, itt: protein miatt q = 3
+pozício specifikus q-gram: (poz, q-gram) pl: ACDEG-hez (2,CDE)
+adatbázis: stringek halmaza
+hitlist (találati lista?): poz-spec q-gram halmaz
+
+Relációs megközelítés:
+- String kollekció 2 táblával: Strings(id /system generated/, string), Annots(id, annot)
+	Minden string-hez van egy leíró rekord az Annots táblában
+- Poz-spec q-gramok: Q-grams(id,j,qg)
+	Illesztés találatokat tárolja a query data és string db között (NINCSENEK index supportok!! Ezt lehetne pótolni)
+	i: query poz, j: db string poz 
+-Működés (BLASTP):
+	query string és db string q-gramokra kell bontani
+	olyan 2 találat kell, ami nem átfedő és azonos átlón vannak biz távon belül (40)
+		átlón vannak: poz különbség egyenlő
+		pl: (2,WYW),(3,WYW) és (6,WYY),(7,WYY) --> 6-2 = 7-3
+	q-gram hasonlóságokat is hozzá kell venni (evolúciós távolságok)
+	
+Profile HMM: protein család kapcsolatainak valószínűség alapú modellje
+String to HMM match: mennyiségi kifejezés a kapcsolatra a string és a család között
+	dinamikus programozással pontos eredményt adő algoritmusok vannak
+	az optimális match-et egy úttal lehet jellemezni a HMM-ben
+	M-states: emission valószínűség: minden karakterre mekkora az esélye, hogy azon a pozíción van (pl M2)
+	I-states és D-states: gap-eket reprezentálnak a matchben
+	Kell: reward és penalty match/mismatch-hez és így --> érték amivel kapcsolatot lehet minősíteni
+	Valószínűségek log-odds-ra vannak konvertálva (random aminosav eloszlás modell szerint) és így a szorzásokat összeadásra lehet módosítani
+	A profile HMM egy hitlistet definiál: minden pozra vizsgáljuk a hozzátartozó M-statet a karaktereivel és a log-odds értékekkel.
+	limitált HMM-hitlist: magas val-al tartjuk csak meg (threshold T)
+	
+Filtering
+	BLASTP esetén 2-hit-diagonal
+	Itt: n-hit diagonal ahol n user paraméter. Ha n nő akkor selectivity nő és érzékenység csökken
+	n-hit diagonal filtering kifejezhető relációs algebrával
+	- natural join Qgrams és Query == ahol q-gram ugyanaz és lesz: id,i,j,qgram tábla
+		Hits := select id, j-i as diag from Qgrams natural join Query;
+	- Hits2 := Hits
+	- Pairs: select id, diag, j, j2 from hits join hits2 on id=id2 and diag=diag2 and abs(j-j2)<=A; (max dist)
+	n-diagonalra grouping operátorral:
+	Filter := select * from pairs group by id, diag, j, count(*) having count(*) >= n-1
+	
+	Ebből a releváns stringek: Candidate := Strings left semi join Filter (szóval azon Strings sorok amelyekhez tartozó id megtalálható a Filter táblában)
+	
+	Note: ez a módszer javítható, ha a található poz-t is belevesszük (db és query oldalról is). Így egy substringjét kaphatnák a Candidate-nek, de a határok meghatározása bonyi, mert a HMM-ben lehetnek gap-ek.
+	
+Miért pont MonetDB?
+- Main memory, cache-conscious
+- Lehet algebrai operátort írni C-ben és hozzáadni a standard operátorokhoz (Mil-extension)
+
