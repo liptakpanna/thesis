@@ -1,0 +1,53 @@
+-- MSA jegyzet --
+illesztések illesztése, progressziv illesztés
+1. páronkénti illesztés
+2. távolság alapú filogenetikai fa készítése
+3. levéltől a gyökérig illesztés
+
+kontra: propagálja az eredeti páronkénti illesztés hibáját
+
+T-coffee javítása: konzisztens A-B egy C szekvencián keresztül és súly hozzárendelése
+pontosabb, de lassabb
+
+Divide and conquer algok: kisebb közeli halmazokra bontás és az illesztések mergelése
+pro: pontos, mert a közelieket egybe veszi
+state of the art: PASTA
+
+BaliBase - 141 MSA ehhez kell hasonlítani az accuracyt
+
+T-Coffee http://www.tcoffee.org/Projects/tcoffee/papers/tcoffee.pdf
+globális (ClustalW) és lokális (Lalign - 10 legmagasabb pont számott kapott) páronkénti illesztést is végrehajt minden párra
+	ez két libraryt képez: minden illesztés páronkénti residue match-ek listája
+	Ezt kell súlyozni, mert vannak fontos és kevésbé fontos részek
+	Súlyozás: percent indentity-je a páronkénti illesztésnek amiből származik
+	
+	A két library kombinációja: ha van duplikált pár akkor a weight összeadódik és merge
+	
+	Illesztés lehet ami legjobban passzol a súlyozott párokra, DE
+	
+	Library kiterjesztés: súlyozzuk, hogy más illesztés lib-nél mennyire konzisztens
+	veszik 2 szekvencia illesztését és hozzánézik egy 3. szekvencia residue-ját is.
+	
+	Ebből dinamikus programozással meghat bármelyik 2 szekvenciára az illesztés
+	
+Továbbfejl: Segment-based https://academic.oup.com/bioinformatics/article/24/16/i187/200409
+ nem karakterenként, hanem szegmensenként és gráfot csinálni ezekből
+
+PASTA: (pdf) hogyan lehet sok 100k szekvenciát illeszteni	D&C
+	S a seq halmaz.
+	- A illesztés random X részhalmaz 100 szekvencia BACKBONE alignment
+	- HMM készítése A-hoz és S-X szekvenciákat egyesével A-hoz illeszti
+	- ML tree készítése (FastTree-2)
+	- m részre bontjuk S-et (max 200 szekv). 
+	- T* fát készítünk a részekhez
+	- Minden részhez MSA-t készítünk (Mafft)
+	- T* fa alapján OPAL segítségével új illesztéseket készítünk
+	- Ezeken páronkénti mergeléssel hozzuk létre a (tranzitivitás)
+	
+MAGUS https://academic.oup.com/bioinformatics/article/37/12/1666/6012350 D&C
+	- Kezdeti fa készítése. 300 szekv illesztése kezdetben
+	- centroid edge decompositionnal subset-ekre bontás
+	- illesztés a subseteken Mafft-al
+	- Graph Clustering Merger: illesztések összekombinálása
+	
+	
